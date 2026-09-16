@@ -10,19 +10,20 @@
 
 Compose Pilotは、ローカル環境のDocker Composeプロジェクトを、ターミナルを開かずブラウザから操作するための軽量GUIです。
 
+各ComposeプロジェクトのサービスとしてCompose Pilotを組み込み、1つのCompose Pilotが同居する1つのComposeプロジェクトだけを管理します。
+
 Docker Desktopにはコンテナ管理機能がありますが、Compose Pilotでは日常的なアプリケーション開発に必要な操作へ焦点を絞ります。
 
-- Composeプロジェクトを探す
 - プロジェクト内のサービスを確認する
 - プロジェクト全体、または選択したサービスをビルド・起動する
 - サービスの状態とログを確認する
 - 停止、再起動、削除を行う
 
-目指すのは、Dockerそのものを管理する汎用ツールではなく、開発者が複数のComposeプロジェクトを扱いやすくするローカル開発ツールです。
+目指すのは、Dockerそのものや複数プロジェクトを横断管理する汎用ツールではなく、個々のComposeプロジェクトに開発用の操作画面を追加するローカル開発ツールです。
 
 ## 想定利用者
 
-- 複数のDocker Composeプロジェクトをローカルで開発している人
+- Docker Composeプロジェクトをローカルで開発している人
 - `docker compose`の基本操作をGUIから行いたい人
 - Docker DesktopよりComposeプロジェクト中心の画面を求めている人
 - チーム内で共通の開発操作を分かりやすく提供したい人
@@ -49,6 +50,54 @@ Composeの挙動を独自に再実装せず、Docker公式の`docker compose`コ
 
 同一プロジェクトへの操作は同時に1件だけ許可します。解決できないパスや未知のサービスを黙って実行せず、操作前にエラーとして扱います。
 
+Compose Pilot自身は通常の操作対象から除外します。「すべてのサービス」を対象にする操作でもCompose Pilot自身を暗黙に含めません。自己停止を許可する場合は、起動時の明示的な設定と実行時の警告を必要とします。
+
+## 単一プロジェクト構成の設計方針
+
+### 1プロジェクトにつき1つのCompose Pilot
+
+Compose Pilotを管理対象プロジェクトのCompose設定へサービスとして追加します。1つのCompose Pilotは、同じCompose設定に属する1プロジェクトだけを管理します。
+
+```text
+Composeプロジェクト
+├── アプリケーションサービス
+├── データベースなどの補助サービス
+└── Compose Pilot
+```
+
+上位ディレクトリからComposeファイルを再帰探索する機能と、画面上のプロジェクト選択は廃止しました。管理対象は起動時に一意に決まり、別のComposeプロジェクトを誤って操作しません。
+
+### Compose Pilot自身の識別
+
+Docker Composeは、起動したコンテナへプロジェクト名とサービス名のラベルを自動付与します。Compose PilotはDocker APIを通じて自身のコンテナを調べ、次の標準ラベルから操作対象のプロジェクト名と自己サービス名を識別します。
+
+```text
+com.docker.compose.project
+com.docker.compose.service
+```
+
+この情報を取得できない場合や、自己サービスがマウントされたCompose設定に存在しない場合は、Compose操作を開始しません。コンテナ外での開発時に限り、`COMPOSE_PROJECT_NAME`と`COMPOSE_PILOT_SERVICE`による明示指定も利用できます。
+
+### 通常モードの操作規則
+
+- Compose Pilot自身はサービス一覧へ管理サービスとして表示するが、選択不可とする
+- サービス未選択時の操作対象は、Compose Pilot自身を除く全サービスとする
+- `build`、`up`、`restart`、`stop`などは対象サービス名を明示して実行する
+- Compose Pilot自身まで停止する`docker compose down`は通常モードでは実行しない
+- 従来の「削除」は、対象サービスを限定できる`stop`と`rm`の組み合わせへの変更を検討する
+
+### 自己操作を許可するオプション
+
+自己操作は初期状態で無効にします。`ALLOW_SELF_OPERATION=true`を起動時に設定した場合だけ、Compose Pilot自身を操作対象として選択できるようにします。
+
+自己停止や再作成ではHTTP接続が途中で切れ、GUIから復旧できない可能性があります。このため、自己操作を選択した実行には、結果を最後まで画面へ返せないことを明示した確認を必要とします。`down`を許可対象に含めるかは別途判断します。
+
+### ホストパスの扱い
+
+ホスト側パスの設定は`HOST_PROJECT_ROOT`とし、探索ルートではなく管理対象プロジェクトそのものの絶対パスを指定します。
+
+コンテナ内では対象プロジェクトを`/workspace`へ読み取り専用でマウントし、bind mountのパス変換には従来どおりホスト側の絶対パスを利用します。
+
 ## 実装に至った経緯
 
 ### 1. デスクトップアプリではなくWebアプリを選択
@@ -69,12 +118,14 @@ Docker Desktop
 
 起動済みコンテナをDockerラベルから検出するだけでは、初回のビルドと起動をGUIから行えません。そのため、指定されたプロジェクトルート以下からComposeファイルを探索する方式を採用しました。
 
-現在は次のファイル名を検出します。
+MVPでは次のファイル名を再帰的に検出します。
 
 - `compose.yaml`
 - `compose.yml`
 - `docker-compose.yaml`
 - `docker-compose.yml`
+
+この探索方式は複数プロジェクトを横断管理する構成を前提としていました。現在は1プロジェクトにつき1つのCompose Pilotを配置し、再帰探索を行いません。
 
 ### 3. ホストと管理コンテナのパス差異をoverrideで解決
 
@@ -96,11 +147,13 @@ build context、Dockerfile、env file、configs、secrets、名前付きvolume�
 
 その後、プロダクトを継続的に変更しやすくし、開発者自身が読み書きしやすい構成にするため、Rubyへ移行しました。現在のバックエンドはRuby 3.4、Sinatra、Pumaで構成しています。
 
-Ruby版では責務を次のように分離しています。
+Ruby版のMVPでは責務を次のように分離していました。単一プロジェクト化に伴い、探索責務は置き換えています。
 
 | コンポーネント | 責務 |
 | --- | --- |
-| `ProjectRegistry` | Composeプロジェクトの探索と識別 |
+| `ProjectRegistry` | Composeプロジェクトの探索と識別（単一プロジェクト化で廃止） |
+| `ProjectLocator` | プロジェクト直下のComposeファイル解決 |
+| `RuntimeIdentityResolver` | 実行中コンテナのプロジェクト名と自己サービス名の解決 |
 | `ComposeRunner` | Compose設定の解析、パス変換、コマンド生成 |
 | `CommandBody` | コマンドの一度だけの実行と出力配信 |
 | `OperationRegistry` | プロジェクト単位の排他制御 |
@@ -109,10 +162,11 @@ Ruby版では責務を次のように分離しています。
 ## 現在のアーキテクチャ
 
 ```text
-web/index.html・app.js
+web/index.html・Vue app.js
         ↓ HTTP API
 Sinatra App
-        ├─ ProjectRegistry
+        ├─ ProjectLocator
+        ├─ RuntimeIdentityResolver
         ├─ ComposeRunner
         ├─ OperationRegistry
         └─ CommandBody
@@ -123,6 +177,8 @@ Sinatra App
                 ↓
         Docker Desktop
 ```
+
+`ProjectRegistry`による複数プロジェクトの探索は廃止し、`ProjectLocator`が起動時に管理対象のCompose設定を1つ解決します。APIも単一プロジェクト前提とし、URLやリクエストにプロジェクトIDを含めません。
 
 ### ディレクトリ構成
 
@@ -137,22 +193,28 @@ compose-pilot/
 │   ├── command_body.rb
 │   ├── compose_runner.rb
 │   ├── operation_registry.rb
-│   └── project_registry.rb
+│   ├── project_locator.rb
+│   └── runtime_identity.rb
 ├── test/
 ├── web/
+│   └── vendor/        # ローカル配置したVueランタイムとライセンス
 └── docs/
 ```
 
+ブラウザ画面はVue 3のグローバルランタイムをローカルから直接読み込みます。npmやViteなどのビルド工程を設けず、既存のContent Security Policyを緩めないため、ブラウザ内テンプレートコンパイラを含まないランタイム版と描画関数を利用します。
+
 ## MVPで実装済みの機能
 
-- 指定ディレクトリ以下のComposeプロジェクト探索
+- プロジェクト直下のComposeファイル解決
 - Compose設定からのサービス一覧取得
-- プロジェクト全体、または選択サービスのビルド
-- プロジェクト全体、または選択サービスの起動
+- Compose Pilot自身を除く全サービス、または選択サービスのビルド
+- Compose Pilot自身を除く全サービス、または選択サービスの起動
 - ビルドと起動の連続実行
-- 再起動、停止、削除
+- 再起動、停止、対象コンテナの削除
+- サービスカードからの個別の起動、停止、再起動
 - サービス状態の表示
 - Composeログの追跡
+- ラベルで指定したWebサービスを公開ポートから別タブで開く
 - コマンド出力のリアルタイム表示
 - macOS向けbind mountパス変換
 - プロジェクト単位の多重実行防止
@@ -185,7 +247,7 @@ Compose PilotはDockerソケットをマウントするため、ホスト上のD
 - ローカル環境だけで利用する
 - `127.0.0.1`だけにポートを公開する
 - インターネットやLANへ直接公開しない
-- `HOST_PROJECTS_ROOT`外のパスを操作しない
+- `HOST_PROJECT_ROOT`外のパスを操作しない
 - サービス名をCompose設定と照合してからコマンドへ渡す
 
 認証機能を実装するまで、リモート利用は対象外とします。
@@ -203,11 +265,22 @@ Compose PilotはDockerソケットをマウントするため、ホスト上のD
 
 ## 今後の開発計画
 
+### 完了：単一プロジェクト構成への移行
+
+- 再帰的なプロジェクト探索を廃止
+- 管理対象のCompose設定を1つに限定
+- サイドメニューのプロジェクト選択を廃止
+- Compose Pilot自身の識別と通常操作からの除外
+- `down`を使わず対象サービスだけを削除する操作へ変更
+- `HOST_PROJECTS_ROOT`から`HOST_PROJECT_ROOT`への設定移行
+- READMEと導入用Compose設定例の更新
+- 既存ユーザー向けの設定移行方法を用意
+
 ### フェーズ1：MVPの安定化
 
-優先度が最も高い段階です。
+単一プロジェクト構成への移行後に、MVPの安定性を高める段階です。
 
-- プロジェクト0件時の診断表示
+- Compose設定を解決できない場合の診断表示
 - Docker接続状態の表示
 - 実行中操作の種類と開始時刻を表示
 - 実行中コマンドの中断
@@ -215,17 +288,15 @@ Compose PilotはDockerソケットをマウントするため、ホスト上のD
 - サービスごとのログ表示
 - ビルドキャッシュ無効化オプションのUI
 - APIとパス変換のテスト拡充
-- Compose Pilot自身への操作を禁止、または警告
+- 自己操作を許可する危険操作モード
 
 ### フェーズ2：Compose機能の拡充
 
 - profilesの表示と選択
-- 複数Composeファイルの指定
 - `pull`操作
 - `build --pull`などのビルドオプション
 - プロジェクト名の明示的な設定
 - Compose設定と生成overrideの確認画面
-- 公開ポートからアプリをブラウザで開く機能
 
 ### フェーズ3：開発ワークフロー支援
 
@@ -233,8 +304,6 @@ Compose PilotはDockerソケットをマウントするため、ホスト上のD
 - プロジェクトごとの定型コマンド登録
 - Rails console、テスト、マイグレーションなどのショートカット
 - 最近実行した操作の履歴
-- よく使うプロジェクトのお気に入り登録
-- プロジェクト横断の状態一覧
 
 ### フェーズ4：対応環境の拡大
 
@@ -249,12 +318,11 @@ Windows対応では、ドライブレター、Docker Desktop内部パス、WSL 2
 
 次に着手する候補は、次の順序を基本とします。
 
-1. プロジェクト0件時の診断表示
-2. サービスごとのログ表示
-3. 実行中操作の表示と中断
-4. Compose Pilot自身への操作防止
-5. profiles対応
-6. Windows向けパス変換
+1. サービスごとのログ表示
+2. 実行中操作の表示と中断
+3. Docker接続状態の表示
+4. profiles対応
+5. Windows向けパス変換
 
 優先順位は、実際の利用で発生した問題をもとに変更します。新機能よりも、データや開発環境を壊す可能性がある問題を優先します。
 

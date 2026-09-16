@@ -7,7 +7,8 @@ require "sinatra/base"
 require_relative "lib/compose_runner"
 require_relative "lib/command_body"
 require_relative "lib/operation_registry"
-require_relative "lib/project_registry"
+require_relative "lib/project_locator"
+require_relative "lib/runtime_identity"
 
 module ComposePilot
   class App < Sinatra::Base
@@ -18,18 +19,27 @@ module ComposePilot
     set :static, true
 
     configure do
-      container_root = ENV.fetch("PROJECTS_ROOT", "/workspace")
-      host_root = ENV.fetch("HOST_PROJECTS_ROOT")
+      container_root = ENV.fetch("PROJECT_ROOT", "/workspace")
+      host_root = ENV.fetch("HOST_PROJECT_ROOT")
       generated_dir = ENV.fetch("GENERATED_DIR", "/data/generated")
+      allow_self_operation = ENV.fetch("ALLOW_SELF_OPERATION", "false") == "true"
 
-      registry = ProjectRegistry.new(container_root: container_root)
+      compose_file = ProjectLocator.new(container_root: container_root).compose_file
+      identity = RuntimeIdentityResolver.new(
+        container_id: ENV.fetch("HOSTNAME", ""),
+        project_name: ENV["COMPOSE_PROJECT_NAME"],
+        service_name: ENV["COMPOSE_PILOT_SERVICE"]
+      ).resolve
       runner = ComposeRunner.new(
         container_root: container_root,
         host_root: host_root,
-        generated_dir: generated_dir
+        generated_dir: generated_dir,
+        compose_file: compose_file,
+        project_name: identity.project_name,
+        self_service: identity.service_name,
+        allow_self_operation: allow_self_operation
       )
 
-      set :registry, registry
       set :runner, runner
       set :operations, OperationRegistry.new
     end
@@ -38,6 +48,7 @@ module ComposePilot
       headers(
         "X-Content-Type-Options" => "nosniff",
         "X-Frame-Options" => "DENY",
+        "Cache-Control" => "no-store",
         "Content-Security-Policy" => "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
       )
     end
@@ -46,10 +57,6 @@ module ComposePilot
       def json_response(value, status: 200)
         content_type :json
         halt status, JSON.generate(value)
-      end
-
-      def project!
-        settings.registry.find(params.fetch("id")) || json_response({ error: "プロジェクトが見つかりません" }, status: 404)
       end
 
       def request_json
@@ -88,20 +95,14 @@ module ComposePilot
       json_response({ ok: false, dockerVersion: "" })
     end
 
-    get "/api/projects" do
-      json_response(settings.registry.all.map(&:to_h))
-    end
-
-    get "/api/projects/:id/config" do
-      project = project!
-      json_response({ services: settings.runner.services(project) })
+    get "/api/project" do
+      json_response(settings.runner.project)
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end
 
-    get "/api/projects/:id/status" do
-      project = project!
-      output, success = settings.runner.status(project)
+    get "/api/status" do
+      output, success = settings.runner.status
       json_response({ output: output, ok: success })
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
@@ -109,23 +110,18 @@ module ComposePilot
 
     post "/api/actions" do
       body = request_json
-      project = settings.registry.find(body["projectId"].to_s)
-      json_response({ error: "プロジェクトが見つかりません" }, status: 404) unless project
-
       command = settings.runner.action_command(
-        project,
         action: body["action"].to_s,
         services: Array(body["services"]).map(&:to_s),
         no_cache: body["noCache"] == true
       )
-      command_response(command, operation_key: project.id)
+      command_response(command, operation_key: "project")
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end
 
-    get "/api/projects/:id/logs" do
-      project = project!
-      command_response(settings.runner.logs_command(project, service: params["service"]))
+    get "/api/logs" do
+      command_response(settings.runner.logs_command(service: params["service"]))
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end

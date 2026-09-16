@@ -1,0 +1,34 @@
+name: compose-pilot-manual
+
+services:
+  demo-web:
+    image: compose-pilot:local
+    command: ["ruby", "/demo-data/server.rb"]
+    ports:
+      - "127.0.0.1:18081:3000"
+    volumes:
+      - ./sample-data:/demo-data:ro
+    labels:
+      compose-pilot.open-port: "3000"
+      compose-pilot.open-scheme: http
+      compose-pilot.open-path: /
+
+  demo-worker:
+    image: compose-pilot:local
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  compose-pilot:
+    image: compose-pilot:local
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace:ro
+      - compose-pilot-manual-data:/data
+    environment:
+      PROJECT_ROOT: /workspace
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:?Set HOST_PROJECT_ROOT}
+      ALLOW_SELF_OPERATION: ${ALLOW_SELF_OPERATION:-false}
+
+volumes:
+  compose-pilot-manual-data:
