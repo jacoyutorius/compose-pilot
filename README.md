@@ -1,3 +1,5 @@
+[![Publish container image](https://github.com/jacoyutorius/compose-pilot/actions/workflows/publish-image.yml/badge.svg)](https://github.com/jacoyutorius/compose-pilot/actions/workflows/publish-image.yml)
+
 # Compose Pilot
 
 Docker Composeプロジェクトへ組み込んで使う、ローカル開発向けの軽量GUIです。
