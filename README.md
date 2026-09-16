@@ -1,3 +1,5 @@
+[![Publish container image](https://github.com/jacoyutorius/compose-pilot/actions/workflows/publish-image.yml/badge.svg)](https://github.com/jacoyutorius/compose-pilot/actions/workflows/publish-image.yml)
+
 # Compose Pilot
 
 Docker Composeプロジェクトへ組み込んで使う、ローカル開発向けの軽量GUIです。
@@ -184,7 +186,7 @@ docker build --no-cache -t compose-pilot:local .
 
 ## コンテナイメージの公開
 
-GitHubで`v0.1.0`のようなセマンティックバージョンのタグを指定してReleaseを公開すると、GitHub ActionsがGHCRへマルチアーキテクチャイメージを公開します。
+GitHubで`v0.1.0`のようなセマンティックバージョンのタグを指定してReleaseを公開すると、GitHub ActionsがGHCRへマルチアーキテクチャイメージを公開します。GitHubのActions画面から`Publish container image`を選び、`Run workflow`で同形式のバージョンを入力して任意に実行することもできます。
 
 例えば`v1.2.3`のReleaseでは、次のタグが生成されます。
 
