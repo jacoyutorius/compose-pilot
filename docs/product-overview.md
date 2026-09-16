@@ -242,7 +242,7 @@ compose-pilot/
 
 利用者がCompose Pilotのソースを取得してローカルビルドしなくても導入できるように、リリース用コンテナイメージをGHCRで配布します。
 
-- GitHub Releaseの公開をイメージ公開の契機とする
+- GitHub Releaseの公開を通常のイメージ公開契機とし、GitHub Actions画面からの手動公開にも対応する
 - セマンティックバージョンからバージョン別タグと安定版の`latest`を生成する
 - Apple SiliconとIntel Macの両方に対応するため、`linux/arm64`と`linux/amd64`を公開する
 - GitHub Actionsの`GITHUB_TOKEN`を利用し、長期間有効な独自トークンを保管しない
