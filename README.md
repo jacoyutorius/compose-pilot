@@ -142,6 +142,8 @@ bundle install
 bundle exec ruby -Itest -e 'Dir["test/*_test.rb"].sort.each { |f| require_relative f }'
 ```
 
+GUIを含む手動動作確認には、既存環境と競合しない18080番ポートの[テスト用Composeプロジェクト](test/manual/README.md)を利用できます。
+
 Dockerイメージを作り直す場合は次を実行します。
 
 ```bash
