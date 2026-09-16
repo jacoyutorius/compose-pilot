@@ -5,6 +5,8 @@ require "open3"
 require "sinatra/base"
 
 require_relative "lib/compose_runner"
+require_relative "lib/command_body"
+require_relative "lib/operation_registry"
 require_relative "lib/project_registry"
 
 module ComposePilot
@@ -29,6 +31,7 @@ module ComposePilot
 
       set :registry, registry
       set :runner, runner
+      set :operations, OperationRegistry.new
     end
 
     before do
@@ -55,26 +58,22 @@ module ComposePilot
         json_response({ error: "リクエストが正しくありません" }, status: 400)
       end
 
-      def stream_command(command)
-        content_type "text/plain", charset: "utf-8"
-        headers "Cache-Control" => "no-store"
-
-        stream(:keep_open) do |output|
-          Thread.new do
-            begin
-              output << "$ #{Shellwords.shelljoin(command)}\n\n"
-              Open3.popen2e(*command) do |_stdin, combined, wait_thread|
-                combined.each_line { |line| output << line }
-                status = wait_thread.value
-                output << (status.success? ? "\n完了しました。\n" : "\nコマンドの実行に失敗しました（終了コード: #{status.exitstatus}）。\n")
-              end
-            rescue StandardError => e
-              output << "\nエラー: #{e.message}\n"
-            ensure
-              output.close
-            end
-          end
+      def command_response(command, operation_key: nil)
+        if operation_key && !settings.operations.acquire(operation_key)
+          return json_response({ error: "このプロジェクトでは別の操作を実行中です" }, status: 409)
         end
+
+        release = operation_key ? -> { settings.operations.release(operation_key) } : nil
+        body = CommandBody.new(command, on_close: release)
+        [
+          200,
+          {
+            "content-type" => "text/plain; charset=utf-8",
+            "cache-control" => "no-store",
+            "x-accel-buffering" => "no"
+          },
+          body
+        ]
       end
     end
 
@@ -119,14 +118,14 @@ module ComposePilot
         services: Array(body["services"]).map(&:to_s),
         no_cache: body["noCache"] == true
       )
-      stream_command(command)
+      command_response(command, operation_key: project.id)
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end
 
     get "/api/projects/:id/logs" do
       project = project!
-      stream_command(settings.runner.logs_command(project, service: params["service"]))
+      command_response(settings.runner.logs_command(project, service: params["service"]))
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end

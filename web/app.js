@@ -1,5 +1,6 @@
 let selected = null;
 let configuredServices = [];
+let actionInProgress = false;
 const $ = (s) => document.querySelector(s);
 
 async function loadProjects() {
@@ -45,7 +46,8 @@ async function loadStatus() {
 }
 
 async function runAction(action) {
-  if (!selected) return;
+  if (!selected || actionInProgress) return;
+  actionInProgress = true;
   const out = $('#output'); out.textContent = '処理を開始しています…\n'; setBusy(true);
   try {
     const services = [...document.querySelectorAll('input[name="service"]:checked')].map(x => x.value);
@@ -53,7 +55,7 @@ async function runAction(action) {
     if (!response.ok) throw new Error(await response.text());
     await readStream(response, out); await loadStatus();
   } catch (e) { out.textContent += `\nエラー: ${e.message}\n`; }
-  finally { setBusy(false); }
+  finally { actionInProgress = false; setBusy(false); }
 }
 
 async function followLogs() {
