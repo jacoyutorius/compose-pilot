@@ -1,0 +1,6 @@
+.git
+.env
+coverage
+tmp
+test
+README.md
