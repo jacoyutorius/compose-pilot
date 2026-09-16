@@ -33,10 +33,10 @@ Vue 3の本番用ランタイムは`web/vendor/`へバージョン固定で配�
 
 ## 導入方法
 
-最初にCompose Pilotのイメージをローカルでビルドします。
+GitHub Releasesで公開されたイメージをGHCRから利用します。`VERSION`は利用するリリース番号へ置き換えてください。
 
 ```bash
-docker build -t compose-pilot:local /path/to/compose-pilot
+docker pull ghcr.io/jacoyutorius/compose-pilot:VERSION
 ```
 
 管理対象プロジェクトの`compose.yaml`へ、次のサービスを追加します。
@@ -44,7 +44,7 @@ docker build -t compose-pilot:local /path/to/compose-pilot
 ```yaml
 services:
   compose-pilot:
-    image: compose-pilot:local
+    image: ghcr.io/jacoyutorius/compose-pilot:VERSION
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -75,6 +75,12 @@ docker compose up -d compose-pilot
 ```
 
 ブラウザで`http://localhost:8080`を開きます。
+
+開発中のコードを試す場合は、Compose Pilotのリポジトリでローカルイメージをビルドし、`image`を`compose-pilot:local`へ変更します。
+
+```bash
+docker build -t compose-pilot:local .
+```
 
 ### Webサービスをブラウザで開く
 
@@ -175,3 +181,18 @@ Dockerイメージを作り直す場合は次を実行します。
 ```bash
 docker build --no-cache -t compose-pilot:local .
 ```
+
+## コンテナイメージの公開
+
+GitHubで`v0.1.0`のようなセマンティックバージョンのタグを指定してReleaseを公開すると、GitHub ActionsがGHCRへマルチアーキテクチャイメージを公開します。
+
+例えば`v1.2.3`のReleaseでは、次のタグが生成されます。
+
+- `ghcr.io/jacoyutorius/compose-pilot:1.2.3`
+- `ghcr.io/jacoyutorius/compose-pilot:1.2`
+- `ghcr.io/jacoyutorius/compose-pilot:1`
+- `ghcr.io/jacoyutorius/compose-pilot:latest`
+
+プレリリース版には`latest`を付与しません。公開対象プラットフォームは`linux/amd64`と`linux/arm64`です。
+
+GHCRパッケージは初回公開時にprivateで作成されます。認証なしで利用できるようにするには、初回Releaseの公開後にGitHubのパッケージ設定でvisibilityをpublicへ変更してください。以降のバージョンは同じパッケージへ追加されます。
