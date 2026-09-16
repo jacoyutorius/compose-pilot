@@ -1,15 +1,17 @@
 services:
   compose-pilot:
+    image: compose-pilot:local
     build: .
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${HOST_PROJECTS_ROOT:?Set HOST_PROJECTS_ROOT}:/workspace:ro
+      - .:/workspace:ro
       - compose-pilot-data:/data
     environment:
-      PROJECTS_ROOT: /workspace
-      HOST_PROJECTS_ROOT: ${HOST_PROJECTS_ROOT}
+      PROJECT_ROOT: /workspace
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:?Set HOST_PROJECT_ROOT}
+      ALLOW_SELF_OPERATION: ${ALLOW_SELF_OPERATION:-false}
     restart: unless-stopped
 
 volumes:
