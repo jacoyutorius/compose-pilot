@@ -89,7 +89,7 @@ const ServiceCard = {
     openUrl: { type: String, default: '' },
     busy: { type: Boolean, required: true }
   },
-  emits: ['update:selected', 'run-action'],
+  emits: ['update:selected', 'run-action', 'follow-logs'],
   render() {
     return h('article', { class: ['service', { 'self-service': this.service.self }] }, [
       h('span', { class: 'service-name' }, [
@@ -115,6 +115,10 @@ const ServiceCard = {
         iconButton('restart', '再起動', {
           disabled: this.busy || !this.service.selectable || !this.running,
           onClick: () => this.$emit('run-action', 'restart')
+        }),
+        iconButton('logs', 'ログを追跡', {
+          disabled: this.busy || !this.service.selectable,
+          onClick: () => this.$emit('follow-logs')
         })
       ]),
       h('div', { class: 'service-footer' }, [
@@ -258,12 +262,13 @@ createApp({
         this.actionInProgress = false;
       }
     },
-    async followLogs() {
+    async followLogs(service = '') {
       if (this.actionInProgress) return;
       this.output = '';
       this.actionInProgress = true;
       try {
-        const response = await fetch('/api/logs');
+        const query = service ? `?service=${encodeURIComponent(service)}` : '';
+        const response = await fetch(`/api/logs${query}`);
         if (!response.ok) throw new Error(await response.text());
         await this.readStream(response);
       } catch (error) {
@@ -294,7 +299,8 @@ createApp({
         openUrl: this.serviceOpenUrl(service),
         busy: this.actionInProgress,
         'onUpdate:selected': selected => this.setServiceSelected(service.name, selected),
-        onRunAction: action => this.runAction(action, [service.name])
+        onRunAction: action => this.runAction(action, [service.name]),
+        onFollowLogs: () => this.followLogs(service.name)
       });
     },
     renderDetail() {

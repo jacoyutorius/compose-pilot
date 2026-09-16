@@ -90,6 +90,30 @@ class ComposeRunnerTest < Minitest::Test
     end
   end
 
+  def test_logs_can_target_a_single_service
+    with_runner do |runner|
+      stub_config do
+        command = runner.logs_command(service: "web")
+
+        assert_equal "web", command.last
+        refute_includes command, "db"
+        refute_includes command, "compose-pilot"
+      end
+    end
+  end
+
+  def test_logs_reject_unknown_service
+    with_runner do |runner|
+      stub_config do
+        error = assert_raises(ComposePilot::ComposeError) do
+          runner.logs_command(service: "unknown")
+        end
+
+        assert_match(/存在しないサービス/, error.message)
+      end
+    end
+  end
+
   def test_relative_host_project_root_is_rejected
     Dir.mktmpdir do |root|
       error = assert_raises(ComposePilot::ComposeError) do
