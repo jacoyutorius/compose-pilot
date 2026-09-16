@@ -131,6 +131,7 @@ Compose PilotはDockerソケットをマウントするため、ホスト上のD
 - 標準ファイル名が複数存在する場合は、安全のため起動を拒否します。
 - 認証機能はありません。
 - プロジェクトルート外を参照するbind mountには対応していません。
+- bind mountは`source`、`target`、`read_only`だけを保持し、その他の詳細オプションには対応していません。
 - Windows・Linux向けのパス変換は未対応です。
 
 ## 開発とテスト
@@ -147,5 +148,5 @@ GUIを含む手動動作確認には、既存環境と競合しない18080番ポ
 Dockerイメージを作り直す場合は次を実行します。
 
 ```bash
-docker compose build --no-cache
+docker build --no-cache -t compose-pilot:local .
 ```
