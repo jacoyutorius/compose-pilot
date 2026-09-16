@@ -1,6 +1,6 @@
 # 手動動作確認
 
-既存のComposeプロジェクトと分離し、`demo-web`と`demo-worker`をCompose Pilotから操作するための構成です。GUIは`http://localhost:18080`で開きます。
+既存のComposeプロジェクトと分離し、`demo-web`と`demo-worker`をCompose Pilotから操作するための構成です。GUIは`http://localhost:18080`、デモWebサービスは`http://localhost:18081`で開きます。
 
 ## 起動
 
@@ -29,6 +29,8 @@ docker compose --env-file test/manual/.env -f test/manual/compose.yaml up -d
 - 通常設定では`compose-pilot`を選択できない
 - サービス未選択の停止・再起動・削除でもCompose Pilotが動作し続ける
 - `demo-web`だけを選択し、停止・再起動・削除を個別に実行できる
+- `demo-web`の「ブラウザで開く」からデモページを別タブで開ける
+- `demo-web`の停止中は「ブラウザで開く」が表示されない
 - 削除後も画面へアクセスでき、Composeネットワークとvolumeが残る
 - ログ追跡にCompose Pilot自身のログが混ざらない
 

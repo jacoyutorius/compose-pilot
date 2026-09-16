@@ -27,6 +27,9 @@ h2 { font-size: 14px; color: #9ba5b7; text-transform: uppercase; letter-spacing:
 .service.self-service { border-style: dashed; }
 .service-name { display: flex; align-items: center; gap: 8px; }
 .service-name input { accent-color: #7868f2; }
+.service-footer { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.open-link { color: #b9b0ff; font-size: 13px; text-decoration: none; }
+.open-link:hover { text-decoration: underline; }
 .log-head { justify-content: flex-start; gap: 8px; }
 .log-head h2 { margin-right: auto; }
 pre { min-height: 330px; max-height: 52vh; overflow: auto; background: #090b0f; border: 1px solid #292f3b; border-radius: 10px; padding: 16px; color: #cbd3df; white-space: pre-wrap; }

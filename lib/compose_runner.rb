@@ -11,6 +11,11 @@ module ComposePilot
   class ComposeError < StandardError; end
 
   class ComposeRunner
+    OPEN_PORT_LABEL = "compose-pilot.open-port"
+    OPEN_SCHEME_LABEL = "compose-pilot.open-scheme"
+    OPEN_PATH_LABEL = "compose-pilot.open-path"
+    OPEN_SCHEMES = %w[http https].freeze
+
     ACTIONS = {
       "build" => ["build"],
       "up" => ["up", "-d"],
@@ -35,13 +40,19 @@ module ComposePilot
 
     def project
       config = compose_config
-      service_names = config.fetch("services", {}).keys
+      service_configs = config.fetch("services", {})
+      service_names = service_configs.keys
       validate_self_service!(service_names)
       {
         name: config.fetch("name", File.basename(@host_root)),
         file: @compose_file,
         services: service_names.map do |name|
-          { name: name, self: name == @self_service, selectable: name != @self_service || @allow_self_operation }
+          {
+            name: name,
+            self: name == @self_service,
+            selectable: name != @self_service || @allow_self_operation,
+            open: open_config(name, service_configs.fetch(name))
+          }
         end,
         allowSelfOperation: @allow_self_operation
       }
@@ -135,6 +146,25 @@ module ComposePilot
       return if services.include?(@self_service)
 
       raise ComposeError, "実行中のCompose PilotサービスがCompose設定に見つかりません: #{@self_service}"
+    end
+
+    def open_config(service_name, service)
+      labels = service.fetch("labels", {})
+      port_label = labels[OPEN_PORT_LABEL]
+      return unless port_label
+
+      port = Integer(port_label.to_s, 10)
+      raise ComposeError, "#{service_name}の#{OPEN_PORT_LABEL}は1から65535で指定してください" unless (1..65_535).cover?(port)
+
+      scheme = labels.fetch(OPEN_SCHEME_LABEL, "http").to_s
+      raise ComposeError, "#{service_name}の#{OPEN_SCHEME_LABEL}はhttpまたはhttpsで指定してください" unless OPEN_SCHEMES.include?(scheme)
+
+      path = labels.fetch(OPEN_PATH_LABEL, "/").to_s
+      raise ComposeError, "#{service_name}の#{OPEN_PATH_LABEL}は/から始めてください" unless path.start_with?("/")
+
+      { targetPort: port, scheme: scheme, path: path }
+    rescue ArgumentError
+      raise ComposeError, "#{service_name}の#{OPEN_PORT_LABEL}は整数で指定してください"
     end
 
     def translated_mount(volume)

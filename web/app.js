@@ -5,11 +5,12 @@ const ServiceCard = {
     service: { type: Object, required: true },
     selected: { type: Boolean, required: true },
     state: { type: String, required: true },
-    ports: { type: String, required: true }
+    ports: { type: String, required: true },
+    openUrl: { type: String, default: '' }
   },
   emits: ['update:selected'],
   render() {
-    return h('label', { class: ['service', { 'self-service': this.service.self }] }, [
+    return h('article', { class: ['service', { 'self-service': this.service.self }] }, [
       h('span', { class: 'service-name' }, [
         h('input', {
           type: 'checkbox',
@@ -21,7 +22,15 @@ const ServiceCard = {
       ]),
       h('span', this.state),
       this.service.self ? h('small', 'Compose Pilot（通常は操作対象外）') : null,
-      h('small', this.ports)
+      h('div', { class: 'service-footer' }, [
+        h('small', this.ports),
+        this.openUrl ? h('a', {
+          class: 'open-link',
+          href: this.openUrl,
+          target: '_blank',
+          rel: 'noopener noreferrer'
+        }, 'ブラウザで開く') : null
+      ])
     ]);
   }
 };
@@ -99,6 +108,20 @@ createApp({
       const item = this.statusByService[name] || {};
       return item.Publishers?.map(port => port.PublishedPort).filter(Boolean).join(', ') || '';
     },
+    serviceOpenUrl(service) {
+      if (!service.open) return '';
+      const item = this.statusByService[service.name] || {};
+      if (!/running/i.test(item.State || '')) return '';
+
+      const publisher = item.Publishers?.find(port =>
+        String(port.Protocol || 'tcp').toLowerCase() === 'tcp' &&
+        Number(port.TargetPort) === service.open.targetPort &&
+        Number(port.PublishedPort) > 0
+      );
+      if (!publisher) return '';
+
+      return `${service.open.scheme}://${window.location.hostname}:${publisher.PublishedPort}${service.open.path}`;
+    },
     setServiceSelected(name, selected) {
       if (selected) {
         if (!this.selectedServices.includes(name)) this.selectedServices.push(name);
@@ -160,6 +183,7 @@ createApp({
         selected: this.selectedServices.includes(service.name),
         state: this.serviceState(service.name),
         ports: this.servicePorts(service.name),
+        openUrl: this.serviceOpenUrl(service),
         'onUpdate:selected': selected => this.setServiceSelected(service.name, selected)
       });
     },

@@ -14,6 +14,7 @@ Docker Composeプロジェクトへ組み込んで使う、ローカル開発向
 - すべて、または選択したサービスのビルド・起動
 - 再起動、停止、コンテナ削除
 - コマンド出力とComposeログのリアルタイム表示
+- ラベルで指定したWebサービスを公開ポートから別タブで開く
 - Compose Pilot自身を通常操作から自動的に除外
 - プロジェクト単位の排他制御による多重実行防止
 - macOSホスト向けbind mountパス変換
@@ -73,6 +74,25 @@ docker compose up -d compose-pilot
 ```
 
 ブラウザで`http://localhost:8080`を開きます。
+
+### Webサービスをブラウザで開く
+
+サービスの公開ポートをGUIから開く場合は、対象サービスへコンテナ側のポートをラベルで指定します。
+
+```yaml
+services:
+  web:
+    ports:
+      - "3000:3000"
+    labels:
+      compose-pilot.open-port: "3000"
+      compose-pilot.open-scheme: http
+      compose-pilot.open-path: /
+```
+
+`compose-pilot.open-port`は必須です。`open-scheme`は`http`が初期値で`https`も指定でき、`open-path`の初期値は`/`です。サービスが起動中で、指定したコンテナポートにホスト側の公開ポートが割り当てられている場合だけ「ブラウザで開く」を表示します。
+
+リンク先のホスト名にはCompose Pilotを表示しているURLのホスト名を使い、公開ポートはDockerの状態から取得します。固定のホスト側ポートをラベルへ重複して記載する必要はありません。
 
 ## 基本的な使い方
 

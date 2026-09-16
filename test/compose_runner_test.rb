@@ -120,6 +120,29 @@ class ComposeRunnerTest < Minitest::Test
     end
   end
 
+  def test_project_exposes_browser_open_configuration
+    with_runner do |runner|
+      stub_config do
+        project = runner.project
+        web = project.fetch(:services).find { |service| service.fetch(:name) == "web" }
+
+        assert_equal({ targetPort: 3000, scheme: "https", path: "/admin" }, web.fetch(:open))
+      end
+    end
+  end
+
+  def test_invalid_browser_open_scheme_is_rejected
+    with_runner do |runner|
+      config = compose_config
+      config["services"]["web"]["labels"]["compose-pilot.open-scheme"] = "file"
+      stub_config(config) do
+        error = assert_raises(ComposePilot::ComposeError) { runner.project }
+
+        assert_match(/httpまたはhttps/, error.message)
+      end
+    end
+  end
+
   private
 
   def with_runner(allow_self_operation: false)
@@ -141,15 +164,24 @@ class ComposeRunnerTest < Minitest::Test
     )
   end
 
-  def stub_config
-    config = {
+  def compose_config
+    {
       "name" => "sample-project",
       "services" => {
-        "web" => {},
+        "web" => {
+          "labels" => {
+            "compose-pilot.open-port" => "3000",
+            "compose-pilot.open-scheme" => "https",
+            "compose-pilot.open-path" => "/admin"
+          }
+        },
         "db" => {},
         "compose-pilot" => {}
       }
     }
+  end
+
+  def stub_config(config = compose_config)
     Open3.stub(:capture3, [JSON.generate(config), "", Status.new(true)]) { yield }
   end
 end
