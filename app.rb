@@ -48,6 +48,7 @@ module ComposePilot
       headers(
         "X-Content-Type-Options" => "nosniff",
         "X-Frame-Options" => "DENY",
+        "Cache-Control" => "no-store",
         "Content-Security-Policy" => "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
       )
     end

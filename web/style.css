@@ -27,6 +27,8 @@ h2 { font-size: 14px; color: #9ba5b7; text-transform: uppercase; letter-spacing:
 .service.self-service { border-style: dashed; }
 .service-name { display: flex; align-items: center; gap: 8px; }
 .service-name input { accent-color: #7868f2; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.service-actions button { padding: 5px 8px; font-size: 12px; }
 .service-footer { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .open-link { color: #b9b0ff; font-size: 13px; text-decoration: none; }
 .open-link:hover { text-decoration: underline; }

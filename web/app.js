@@ -5,10 +5,12 @@ const ServiceCard = {
     service: { type: Object, required: true },
     selected: { type: Boolean, required: true },
     state: { type: String, required: true },
+    running: { type: Boolean, required: true },
     ports: { type: String, required: true },
-    openUrl: { type: String, default: '' }
+    openUrl: { type: String, default: '' },
+    busy: { type: Boolean, required: true }
   },
-  emits: ['update:selected'],
+  emits: ['update:selected', 'run-action'],
   render() {
     return h('article', { class: ['service', { 'self-service': this.service.self }] }, [
       h('span', { class: 'service-name' }, [
@@ -22,6 +24,23 @@ const ServiceCard = {
       ]),
       h('span', this.state),
       this.service.self ? h('small', 'Compose Pilot（通常は操作対象外）') : null,
+      h('div', { class: 'service-actions' }, [
+        h('button', {
+          type: 'button',
+          disabled: this.busy || !this.service.selectable || this.running,
+          onClick: () => this.$emit('run-action', 'up')
+        }, '起動'),
+        h('button', {
+          type: 'button',
+          disabled: this.busy || !this.service.selectable || !this.running,
+          onClick: () => this.$emit('run-action', 'stop')
+        }, '停止'),
+        h('button', {
+          type: 'button',
+          disabled: this.busy || !this.service.selectable || !this.running,
+          onClick: () => this.$emit('run-action', 'restart')
+        }, '再起動')
+      ]),
       h('div', { class: 'service-footer' }, [
         h('small', this.ports),
         this.openUrl ? h('a', {
@@ -104,6 +123,10 @@ createApp({
       const item = this.statusByService[name] || {};
       return /running/i.test(item.State || '') ? '起動中' : (item.State || item.Status || '停止中');
     },
+    serviceRunning(name) {
+      const item = this.statusByService[name] || {};
+      return /running/i.test(item.State || '');
+    },
     servicePorts(name) {
       const item = this.statusByService[name] || {};
       return item.Publishers?.map(port => port.PublishedPort).filter(Boolean).join(', ') || '';
@@ -129,9 +152,9 @@ createApp({
         this.selectedServices = this.selectedServices.filter(selectedName => selectedName !== name);
       }
     },
-    async runAction(action) {
+    async runAction(action, services = this.selectedServices) {
       if (this.actionInProgress || !this.project) return;
-      const includesSelf = this.project.services.some(service => service.self && this.selectedServices.includes(service.name));
+      const includesSelf = this.project.services.some(service => service.self && services.includes(service.name));
       if (includesSelf && !window.confirm('Compose Pilot自身が停止または再作成され、画面との接続が切れる可能性があります。実行しますか？')) return;
 
       this.actionInProgress = true;
@@ -140,7 +163,7 @@ createApp({
         const response = await fetch('/api/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, services: this.selectedServices })
+          body: JSON.stringify({ action, services })
         });
         if (!response.ok) throw new Error(await response.text());
         await this.readStream(response);
@@ -182,9 +205,12 @@ createApp({
         service,
         selected: this.selectedServices.includes(service.name),
         state: this.serviceState(service.name),
+        running: this.serviceRunning(service.name),
         ports: this.servicePorts(service.name),
         openUrl: this.serviceOpenUrl(service),
-        'onUpdate:selected': selected => this.setServiceSelected(service.name, selected)
+        busy: this.actionInProgress,
+        'onUpdate:selected': selected => this.setServiceSelected(service.name, selected),
+        onRunAction: action => this.runAction(action, [service.name])
       });
     },
     renderDetail() {
