@@ -1,5 +1,77 @@
 const { createApp, h } = Vue;
 
+const iconPaths = {
+  'build-up': [
+    ['path', { d: 'M12 3 4 7l8 4 8-4-8-4Z' }],
+    ['path', { d: 'm4 12 8 4 8-4' }],
+    ['path', { d: 'm4 17 8 4 8-4' }],
+    ['path', { d: 'M18 15V9m-3 3 3-3 3 3' }]
+  ],
+  build: [
+    ['path', { d: 'M12 3 4 7l8 4 8-4-8-4Z' }],
+    ['path', { d: 'm4 12 8 4 8-4' }],
+    ['path', { d: 'm4 17 8 4 8-4' }]
+  ],
+  play: [['path', { d: 'm8 5 11 7-11 7V5Z' }]],
+  restart: [
+    ['path', { d: 'M20 11a8 8 0 1 0-2.3 5.7' }],
+    ['path', { d: 'M20 4v7h-7' }]
+  ],
+  stop: [['rect', { x: '6', y: '6', width: '12', height: '12', rx: '2' }]],
+  remove: [
+    ['path', { d: 'M4 7h16' }],
+    ['path', { d: 'M9 7V4h6v3' }],
+    ['path', { d: 'm7 7 1 13h8l1-13' }]
+  ],
+  refresh: [
+    ['path', { d: 'M20 11a8 8 0 1 0-2.3 5.7' }],
+    ['path', { d: 'M20 4v7h-7' }]
+  ],
+  logs: [
+    ['path', { d: 'M4 5h16v14H4z' }],
+    ['path', { d: 'm8 9 3 3-3 3' }],
+    ['path', { d: 'M13 15h3' }]
+  ],
+  clear: [
+    ['path', { d: 'm5 5 14 14' }],
+    ['path', { d: 'm19 5-14 14' }]
+  ],
+  external: [
+    ['path', { d: 'M14 5h5v5' }],
+    ['path', { d: 'm19 5-8 8' }],
+    ['path', { d: 'M17 13v6H5V7h6' }]
+  ]
+};
+
+const AppIcon = {
+  props: { name: { type: String, required: true }, size: { type: Number, default: 18 } },
+  render() {
+    return h('svg', {
+      class: 'icon',
+      width: this.size,
+      height: this.size,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true'
+    }, (iconPaths[this.name] || []).map(([tag, attributes]) => h(tag, attributes)));
+  }
+};
+
+function iconButton(icon, label, attributes = {}) {
+  return h('button', {
+    ...attributes,
+    class: ['icon-button', attributes.class],
+    type: 'button',
+    title: label,
+    'aria-label': label,
+    'data-tooltip': label
+  }, [h(AppIcon, { name: icon })]);
+}
+
 const ServiceCard = {
   props: {
     service: { type: Object, required: true },
@@ -25,30 +97,30 @@ const ServiceCard = {
       h('span', this.state),
       this.service.self ? h('small', 'Compose Pilot（通常は操作対象外）') : null,
       h('div', { class: 'service-actions' }, [
-        h('button', {
-          type: 'button',
+        iconButton('play', '起動', {
           disabled: this.busy || !this.service.selectable || this.running,
           onClick: () => this.$emit('run-action', 'up')
-        }, '起動'),
-        h('button', {
-          type: 'button',
+        }),
+        iconButton('stop', '停止', {
           disabled: this.busy || !this.service.selectable || !this.running,
           onClick: () => this.$emit('run-action', 'stop')
-        }, '停止'),
-        h('button', {
-          type: 'button',
+        }),
+        iconButton('restart', '再起動', {
           disabled: this.busy || !this.service.selectable || !this.running,
           onClick: () => this.$emit('run-action', 'restart')
-        }, '再起動')
+        })
       ]),
       h('div', { class: 'service-footer' }, [
         h('small', this.ports),
         this.openUrl ? h('a', {
-          class: 'open-link',
+          class: ['open-link', 'icon-button'],
           href: this.openUrl,
           target: '_blank',
-          rel: 'noopener noreferrer'
-        }, 'ブラウザで開く') : null
+          rel: 'noopener noreferrer',
+          title: 'ブラウザで開く',
+          'aria-label': 'ブラウザで開く',
+          'data-tooltip': 'ブラウザで開く'
+        }, [h(AppIcon, { name: 'external' })]) : null
       ])
     ]);
   }
@@ -215,28 +287,28 @@ createApp({
     },
     renderDetail() {
       const actions = [
-        ['build-up', 'ビルドして起動', 'primary'],
-        ['build', 'ビルド', ''],
-        ['restart', '再起動', ''],
-        ['stop', '停止', ''],
-        ['remove', '削除', 'danger']
+        ['build-up', 'build-up', 'ビルドして起動', 'primary'],
+        ['build', 'build', 'ビルド', ''],
+        ['restart', 'restart', '再起動', ''],
+        ['stop', 'stop', '停止', ''],
+        ['remove', 'remove', '削除', 'danger']
       ];
       return h('div', [
         h('div', { class: 'title-row' }, [
           h('div', [h('h1', this.project.name), h('p', { id: 'path' }, this.project.file)]),
           h('span', { class: ['badge', { running: this.projectRunning }] }, this.projectState)
         ]),
-        h('div', { class: 'actions' }, actions.map(([action, label, className]) => h('button', {
+        h('div', { class: 'actions' }, actions.map(([action, icon, label, className]) => iconButton(icon, label, {
           class: className,
           disabled: this.actionInProgress,
           onClick: () => this.runAction(action)
-        }, label))),
+        }))),
         h('h2', ['サービス ', h('small', '（未選択ならすべて）')]),
         h('div', { class: 'services' }, this.project.services.map(service => this.renderService(service))),
         h('div', { class: 'log-head' }, [
           h('h2', '実行結果'),
-          h('button', { disabled: this.actionInProgress, onClick: this.followLogs }, 'ログを追跡'),
-          h('button', { onClick: () => { this.output = ''; } }, '消去')
+          iconButton('logs', 'ログを追跡', { disabled: this.actionInProgress, onClick: this.followLogs }),
+          iconButton('clear', '実行結果を消去', { onClick: () => { this.output = ''; } })
         ]),
         h('pre', { ref: 'output' }, this.output)
       ]);
@@ -250,8 +322,11 @@ createApp({
 
     return h('div', { class: 'app-shell' }, [
       h('header', [
-        h('div', [h('strong', 'Compose Pilot'), h('span', 'macOS MVP')]),
-        h('button', { disabled: this.loading, onClick: this.refresh }, '再読み込み')
+        h('div', { class: 'brand' }, [
+          h('img', { src: '/logo.svg', width: '34', height: '34', alt: '' }),
+          h('div', [h('strong', 'Compose Pilot'), h('span', 'macOS MVP')])
+        ]),
+        iconButton('refresh', '再読み込み', { disabled: this.loading, onClick: this.refresh })
       ]),
       h('main', [h('section', { class: 'content' }, [content])])
     ]);
