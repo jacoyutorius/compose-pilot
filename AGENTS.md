@@ -2,7 +2,7 @@
 
 ## プロジェクト構成
 
-`app.rb` は Sinatra のルーティングと HTTP 応答を担当します。主要ロジックは `lib/` に置き、Compose ファイル解決は `project_locator.rb`、実行中コンテナの識別は `runtime_identity.rb`、Compose コマンド生成とパス変換は `compose_runner.rb`、出力配信は `command_body.rb`、排他制御は `operation_registry.rb` に分離します。ブラウザ側の HTML、CSS、JavaScript は `web/`、Minitest は `test/` に配置します。設計判断や優先順位を変更する場合は `docs/product-overview.md` も更新してください。
+`app.rb` は Sinatra のルーティングと HTTP 応答を担当します。主要ロジックは `lib/` に置き、Compose ファイル解決は `project_locator.rb`、実行中コンテナの識別は `runtime_identity.rb`、Compose コマンド生成とパス変換は `compose_runner.rb`、出力配信は `command_body.rb`、排他制御は `operation_registry.rb` に分離します。ブラウザ側はビルド不要の Vue 3 と HTML、CSS、JavaScriptで構成し、`web/`に配置します。ローカル配信するVueランタイムとライセンスは`web/vendor/`で管理します。Minitestは`test/`に配置します。設計判断や優先順位を変更する場合は `docs/product-overview.md` も更新してください。
 
 ## ビルド・テスト・開発コマンド
 

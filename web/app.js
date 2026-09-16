@@ -1,94 +1,209 @@
-let configuredServices = [];
-let actionInProgress = false;
-const $ = (selector) => document.querySelector(selector);
+const { createApp, h } = Vue;
 
-async function loadProject() {
-  const response = await fetch('/api/project');
-  if (!response.ok) throw new Error(await response.text());
-
-  const project = await response.json();
-  configuredServices = project.services || [];
-  $('#name').textContent = project.name;
-  $('#path').textContent = project.file;
-  $('#services').innerHTML = configuredServices.map(service => {
-    const disabled = service.selectable ? '' : ' disabled';
-    const label = service.self ? '<small>Compose Pilot（通常は操作対象外）</small>' : '';
-    return `<label class="service${service.self ? ' self-service' : ''}"><span class="service-name"><input type="checkbox" name="service" value="${escapeHtml(service.name)}"${disabled}><strong>${escapeHtml(service.name)}</strong></span><span data-state="${escapeHtml(service.name)}">未確認</span>${label}<small data-ports="${escapeHtml(service.name)}"></small></label>`;
-  }).join('');
-  $('#error').hidden = true;
-  $('#detail').hidden = false;
-  await loadStatus();
-}
-
-async function loadStatus() {
-  const response = await fetch('/api/status');
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || '状態を取得できませんでした');
-
-  const rows = String(data.output || '').trim().split('\n').filter(Boolean).flatMap(line => {
-    try { const parsed = JSON.parse(line); return Array.isArray(parsed) ? parsed : [parsed]; } catch { return []; }
-  });
-  $('#state').textContent = rows.length ? `${rows.filter(x => /running/i.test(x.State || '')).length}/${rows.length} 起動中` : '停止中';
-  $('#state').className = 'badge ' + (rows.some(x => /running/i.test(x.State || '')) ? 'running' : '');
-  const byService = Object.fromEntries(rows.map(x => [x.Service || x.Name, x]));
-  for (const service of configuredServices) {
-    const item = byService[service.name] || {};
-    const state = /running/i.test(item.State || '') ? '起動中' : (item.State || item.Status || '停止中');
-    const stateNode = document.querySelector(`[data-state="${CSS.escape(service.name)}"]`);
-    const portsNode = document.querySelector(`[data-ports="${CSS.escape(service.name)}"]`);
-    if (stateNode) stateNode.textContent = state;
-    if (portsNode) portsNode.textContent = item.Publishers?.map(port => port.PublishedPort).filter(Boolean).join(', ') || '';
+const ServiceCard = {
+  props: {
+    service: { type: Object, required: true },
+    selected: { type: Boolean, required: true },
+    state: { type: String, required: true },
+    ports: { type: String, required: true }
+  },
+  emits: ['update:selected'],
+  render() {
+    return h('label', { class: ['service', { 'self-service': this.service.self }] }, [
+      h('span', { class: 'service-name' }, [
+        h('input', {
+          type: 'checkbox',
+          checked: this.selected,
+          disabled: !this.service.selectable,
+          onChange: event => this.$emit('update:selected', event.target.checked)
+        }),
+        h('strong', this.service.name)
+      ]),
+      h('span', this.state),
+      this.service.self ? h('small', 'Compose Pilot（通常は操作対象外）') : null,
+      h('small', this.ports)
+    ]);
   }
-}
+};
 
-async function runAction(action) {
-  if (actionInProgress) return;
-  const selected = [...document.querySelectorAll('input[name="service"]:checked')].map(input => input.value);
-  const includesSelf = configuredServices.some(service => service.self && selected.includes(service.name));
-  if (includesSelf && !window.confirm('Compose Pilot自身が停止または再作成され、画面との接続が切れる可能性があります。実行しますか？')) return;
+createApp({
+  components: { ServiceCard },
+  data() {
+    return {
+      project: null,
+      statusRows: [],
+      selectedServices: [],
+      output: '操作できます。',
+      actionInProgress: false,
+      loading: true,
+      error: ''
+    };
+  },
+  computed: {
+    statusByService() {
+      return Object.fromEntries(this.statusRows.map(item => [item.Service || item.Name, item]));
+    },
+    projectState() {
+      if (!this.statusRows.length) return '停止中';
+      const running = this.statusRows.filter(item => /running/i.test(item.State || '')).length;
+      return `${running}/${this.statusRows.length} 起動中`;
+    },
+    projectRunning() {
+      return this.statusRows.some(item => /running/i.test(item.State || ''));
+    }
+  },
+  mounted() {
+    this.refresh();
+  },
+  methods: {
+    async refresh() {
+      this.loading = true;
+      this.error = '';
+      try {
+        await this.loadProject();
+      } catch (error) {
+        this.project = null;
+        this.error = `設定を読み込めませんでした: ${error.message}`;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loadProject() {
+      const response = await fetch('/api/project');
+      if (!response.ok) throw new Error(await response.text());
 
-  actionInProgress = true;
-  const out = $('#output'); out.textContent = '処理を開始しています…\n'; setBusy(true);
-  try {
-    const response = await fetch('/api/actions', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, services:selected})});
-    if (!response.ok) throw new Error(await response.text());
-    await readStream(response, out); await loadStatus();
-  } catch (error) { out.textContent += `\nエラー: ${error.message}\n`; }
-  finally { actionInProgress = false; setBusy(false); }
-}
+      this.project = await response.json();
+      const selectable = new Set(this.project.services.filter(service => service.selectable).map(service => service.name));
+      this.selectedServices = this.selectedServices.filter(name => selectable.has(name));
+      await this.loadStatus();
+    },
+    async loadStatus() {
+      const response = await fetch('/api/status');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '状態を取得できませんでした');
 
-async function followLogs() {
-  const out = $('#output'); out.textContent = ''; setBusy(true);
-  try {
-    const response = await fetch('/api/logs');
-    if (!response.ok) throw new Error(await response.text());
-    await readStream(response, out);
-  } catch (error) { out.textContent += `\nエラー: ${error.message}\n`; }
-  finally { setBusy(false); }
-}
+      this.statusRows = String(data.output || '').trim().split('\n').filter(Boolean).flatMap(line => {
+        try {
+          const parsed = JSON.parse(line);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          return [];
+        }
+      });
+    },
+    serviceState(name) {
+      const item = this.statusByService[name] || {};
+      return /running/i.test(item.State || '') ? '起動中' : (item.State || item.Status || '停止中');
+    },
+    servicePorts(name) {
+      const item = this.statusByService[name] || {};
+      return item.Publishers?.map(port => port.PublishedPort).filter(Boolean).join(', ') || '';
+    },
+    setServiceSelected(name, selected) {
+      if (selected) {
+        if (!this.selectedServices.includes(name)) this.selectedServices.push(name);
+      } else {
+        this.selectedServices = this.selectedServices.filter(selectedName => selectedName !== name);
+      }
+    },
+    async runAction(action) {
+      if (this.actionInProgress || !this.project) return;
+      const includesSelf = this.project.services.some(service => service.self && this.selectedServices.includes(service.name));
+      if (includesSelf && !window.confirm('Compose Pilot自身が停止または再作成され、画面との接続が切れる可能性があります。実行しますか？')) return;
 
-async function readStream(response, out) {
-  const reader = response.body.getReader(), decoder = new TextDecoder();
-  while (true) {
-    const {value, done} = await reader.read();
-    if (done) break;
-    out.textContent += decoder.decode(value, {stream:true});
-    out.scrollTop = out.scrollHeight;
+      this.actionInProgress = true;
+      this.output = '処理を開始しています…\n';
+      try {
+        const response = await fetch('/api/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, services: this.selectedServices })
+        });
+        if (!response.ok) throw new Error(await response.text());
+        await this.readStream(response);
+        await this.loadStatus();
+      } catch (error) {
+        this.output += `\nエラー: ${error.message}\n`;
+      } finally {
+        this.actionInProgress = false;
+      }
+    },
+    async followLogs() {
+      if (this.actionInProgress) return;
+      this.output = '';
+      this.actionInProgress = true;
+      try {
+        const response = await fetch('/api/logs');
+        if (!response.ok) throw new Error(await response.text());
+        await this.readStream(response);
+      } catch (error) {
+        this.output += `\nエラー: ${error.message}\n`;
+      } finally {
+        this.actionInProgress = false;
+      }
+    },
+    async readStream(response) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        this.output += decoder.decode(value, { stream: true });
+        await this.$nextTick();
+        if (this.$refs.output) this.$refs.output.scrollTop = this.$refs.output.scrollHeight;
+      }
+    },
+    renderService(service) {
+      return h(ServiceCard, {
+        key: service.name,
+        service,
+        selected: this.selectedServices.includes(service.name),
+        state: this.serviceState(service.name),
+        ports: this.servicePorts(service.name),
+        'onUpdate:selected': selected => this.setServiceSelected(service.name, selected)
+      });
+    },
+    renderDetail() {
+      const actions = [
+        ['build-up', 'ビルドして起動', 'primary'],
+        ['build', 'ビルド', ''],
+        ['restart', '再起動', ''],
+        ['stop', '停止', ''],
+        ['remove', '削除', 'danger']
+      ];
+      return h('div', [
+        h('div', { class: 'title-row' }, [
+          h('div', [h('h1', this.project.name), h('p', { id: 'path' }, this.project.file)]),
+          h('span', { class: ['badge', { running: this.projectRunning }] }, this.projectState)
+        ]),
+        h('div', { class: 'actions' }, actions.map(([action, label, className]) => h('button', {
+          class: className,
+          disabled: this.actionInProgress,
+          onClick: () => this.runAction(action)
+        }, label))),
+        h('h2', ['サービス ', h('small', '（未選択ならすべて）')]),
+        h('div', { class: 'services' }, this.project.services.map(service => this.renderService(service))),
+        h('div', { class: 'log-head' }, [
+          h('h2', '実行結果'),
+          h('button', { disabled: this.actionInProgress, onClick: this.followLogs }, 'ログを追跡'),
+          h('button', { onClick: () => { this.output = ''; } }, '消去')
+        ]),
+        h('pre', { ref: 'output' }, this.output)
+      ]);
+    }
+  },
+  render() {
+    let content;
+    if (this.loading) content = h('div', { class: 'empty' }, '読み込んでいます…');
+    else if (this.error) content = h('div', { class: 'empty' }, this.error);
+    else content = this.renderDetail();
+
+    return h('div', { class: 'app-shell' }, [
+      h('header', [
+        h('div', [h('strong', 'Compose Pilot'), h('span', 'macOS MVP')]),
+        h('button', { disabled: this.loading, onClick: this.refresh }, '再読み込み')
+      ]),
+      h('main', [h('section', { class: 'content' }, [content])])
+    ]);
   }
-}
-
-function setBusy(value) { document.querySelectorAll('.actions button').forEach(button => button.disabled = value); }
-function escapeHtml(value) { const element=document.createElement('div'); element.textContent=String(value); return element.innerHTML; }
-
-document.querySelectorAll('[data-action]').forEach(button => button.onclick = () => runAction(button.dataset.action));
-$('#refresh').onclick = async () => { try { await loadProject(); } catch (error) { showLoadError(error); } };
-$('#logs').onclick = followLogs;
-$('#clear').onclick = () => $('#output').textContent = '';
-
-function showLoadError(error) {
-  $('#detail').hidden = true;
-  $('#error').hidden = false;
-  $('#error').textContent = `設定を読み込めませんでした: ${error.message}`;
-}
-
-loadProject().catch(showLoadError);
+}).mount('#app');

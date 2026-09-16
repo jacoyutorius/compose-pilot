@@ -162,7 +162,7 @@ Ruby版のMVPでは責務を次のように分離していました。単一プ�
 ## 現在のアーキテクチャ
 
 ```text
-web/index.html・app.js
+web/index.html・Vue app.js
         ↓ HTTP API
 Sinatra App
         ├─ ProjectLocator
@@ -197,8 +197,11 @@ compose-pilot/
 │   └── runtime_identity.rb
 ├── test/
 ├── web/
+│   └── vendor/        # ローカル配置したVueランタイムとライセンス
 └── docs/
 ```
+
+ブラウザ画面はVue 3のグローバルランタイムをローカルから直接読み込みます。npmやViteなどのビルド工程を設けず、既存のContent Security Policyを緩めないため、ブラウザ内テンプレートコンパイラを含まないランタイム版と描画関数を利用します。
 
 ## MVPで実装済みの機能
 

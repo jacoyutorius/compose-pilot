@@ -4,7 +4,7 @@ Docker Composeプロジェクトへ組み込んで使う、ローカル開発向
 
 1つのCompose Pilotが、同じCompose設定に属する1つのプロジェクトを管理します。ブラウザからサービスのビルド、起動、再起動、停止、削除、状態確認、ログ追跡を行えます。
 
-このMVPはmacOSのDocker Desktopを対象としています。バックエンドはRuby 3.4、Sinatra、Puma、ブラウザ画面はHTML、CSS、JavaScriptで構成しています。
+このMVPはmacOSのDocker Desktopを対象としています。バックエンドはRuby 3.4、Sinatra、Puma、ブラウザ画面はビルド不要のVue 3、HTML、CSS、JavaScriptで構成しています。
 
 設計判断と今後の開発計画は[プロダクト概要・開発計画](docs/product-overview.md)を参照してください。
 
@@ -26,6 +26,8 @@ Docker Composeプロジェクトへ組み込んで使う、ローカル開発向
 - `docker compose`が利用できること
 
 Compose Pilot自身はコンテナ内で動くため、ホスト側へのRubyのインストールは不要です。
+
+Vue 3の本番用ランタイムは`web/vendor/`へバージョン固定で配置しているため、画面表示時のCDNアクセスやNode.jsによるフロントエンドビルドも不要です。ライセンスは`web/vendor/VUE-LICENSE.txt`を参照してください。
 
 ## 導入方法
 

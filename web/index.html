@@ -7,25 +7,8 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header><div><strong>Compose Pilot</strong><span>macOS MVP</span></div><button id="refresh">再読み込み</button></header>
-  <main>
-    <section class="content">
-      <div id="error" class="empty" hidden></div>
-      <div id="detail" hidden>
-        <div class="title-row"><div><h1 id="name"></h1><p id="path"></p></div><span id="state" class="badge">未確認</span></div>
-        <div class="actions">
-          <button data-action="build-up" class="primary">ビルドして起動</button>
-          <button data-action="build">ビルド</button>
-          <button data-action="restart">再起動</button>
-          <button data-action="stop">停止</button>
-          <button data-action="remove" class="danger">削除</button>
-        </div>
-        <h2>サービス <small>（未選択ならすべて）</small></h2><div id="services" class="services"></div>
-        <div class="log-head"><h2>実行結果</h2><button id="logs">ログを追跡</button><button id="clear">消去</button></div>
-        <pre id="output">操作できます。</pre>
-      </div>
-    </section>
-  </main>
+  <div id="app"></div>
+  <script src="/vendor/vue.runtime.global.prod.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
