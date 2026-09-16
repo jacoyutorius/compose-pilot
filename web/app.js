@@ -40,6 +40,13 @@ const iconPaths = {
     ['path', { d: 'M14 5h5v5' }],
     ['path', { d: 'm19 5-8 8' }],
     ['path', { d: 'M17 13v6H5V7h6' }]
+  ],
+  sun: [
+    ['circle', { cx: '12', cy: '12', r: '4' }],
+    ['path', { d: 'M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4' }]
+  ],
+  moon: [
+    ['path', { d: 'M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z' }]
   ]
 };
 
@@ -136,7 +143,8 @@ createApp({
       output: '操作できます。',
       actionInProgress: false,
       loading: true,
-      error: ''
+      error: '',
+      theme: window.ComposePilotTheme.current()
     };
   },
   computed: {
@@ -223,6 +231,10 @@ createApp({
       } else {
         this.selectedServices = this.selectedServices.filter(selectedName => selectedName !== name);
       }
+    },
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark';
+      window.ComposePilotTheme.apply(this.theme);
     },
     async runAction(action, services = this.selectedServices) {
       if (this.actionInProgress || !this.project) return;
@@ -326,7 +338,14 @@ createApp({
           h('img', { src: '/logo.svg', width: '34', height: '34', alt: '' }),
           h('div', [h('strong', 'Compose Pilot'), h('span', 'macOS MVP')])
         ]),
-        iconButton('refresh', '再読み込み', { disabled: this.loading, onClick: this.refresh })
+        h('div', { class: 'header-actions' }, [
+          iconButton(
+            this.theme === 'dark' ? 'sun' : 'moon',
+            this.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え',
+            { onClick: this.toggleTheme }
+          ),
+          iconButton('refresh', '再読み込み', { disabled: this.loading, onClick: this.refresh })
+        ])
       ]),
       h('main', [h('section', { class: 'content' }, [content])])
     ]);
