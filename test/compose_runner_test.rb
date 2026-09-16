@@ -86,6 +86,7 @@ class ComposeRunnerTest < Minitest::Test
 
         assert_equal ["web", "db"], command.last(2)
         refute_includes command, "compose-pilot"
+        refute_includes command, "--follow"
       end
     end
   end
@@ -98,6 +99,7 @@ class ComposeRunnerTest < Minitest::Test
         assert_equal "web", command.last
         refute_includes command, "db"
         refute_includes command, "compose-pilot"
+        refute_includes command, "--follow"
       end
     end
   end

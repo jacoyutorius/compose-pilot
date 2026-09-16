@@ -146,6 +146,11 @@ createApp({
       selectedServices: [],
       output: '操作できます。',
       actionInProgress: false,
+      logFollowing: false,
+      logService: '',
+      logAbortController: null,
+      logRefreshTimer: null,
+      logRefreshResolve: null,
       loading: true,
       error: '',
       theme: window.ComposePilotTheme.current()
@@ -166,6 +171,9 @@ createApp({
   },
   mounted() {
     this.refresh();
+  },
+  beforeUnmount() {
+    this.stopLogs();
   },
   methods: {
     async refresh() {
@@ -241,7 +249,7 @@ createApp({
       window.ComposePilotTheme.apply(this.theme);
     },
     async runAction(action, services = this.selectedServices) {
-      if (this.actionInProgress || !this.project) return;
+      if (this.actionInProgress || this.logFollowing || !this.project) return;
       const includesSelf = this.project.services.some(service => service.self && services.includes(service.name));
       if (includesSelf && !window.confirm('Compose Pilot自身が停止または再作成され、画面との接続が切れる可能性があります。実行しますか？')) return;
 
@@ -263,19 +271,45 @@ createApp({
       }
     },
     async followLogs(service = '') {
-      if (this.actionInProgress) return;
-      this.output = '';
-      this.actionInProgress = true;
+      if (this.actionInProgress || this.logFollowing) return;
+      this.logFollowing = true;
+      this.logService = service;
       try {
-        const query = service ? `?service=${encodeURIComponent(service)}` : '';
-        const response = await fetch(`/api/logs${query}`);
-        if (!response.ok) throw new Error(await response.text());
-        await this.readStream(response);
+        while (this.logFollowing) {
+          this.logAbortController = new AbortController();
+          const query = service ? `?service=${encodeURIComponent(service)}` : '';
+          const response = await fetch(`/api/logs${query}`, { signal: this.logAbortController.signal });
+          if (!response.ok) throw new Error(await response.text());
+          this.output = '';
+          await this.readStream(response);
+          if (this.logFollowing) await this.waitForLogRefresh();
+        }
       } catch (error) {
-        this.output += `\nエラー: ${error.message}\n`;
+        if (error.name !== 'AbortError') this.output += `\nエラー: ${error.message}\n`;
       } finally {
-        this.actionInProgress = false;
+        this.logFollowing = false;
+        this.logService = '';
+        this.logAbortController = null;
+        this.resolveLogRefresh();
       }
+    },
+    waitForLogRefresh() {
+      return new Promise(resolve => {
+        this.logRefreshResolve = resolve;
+        this.logRefreshTimer = window.setTimeout(() => this.resolveLogRefresh(), 2000);
+      });
+    },
+    resolveLogRefresh() {
+      if (this.logRefreshTimer) window.clearTimeout(this.logRefreshTimer);
+      this.logRefreshTimer = null;
+      const resolve = this.logRefreshResolve;
+      this.logRefreshResolve = null;
+      resolve?.();
+    },
+    stopLogs() {
+      this.logFollowing = false;
+      this.logAbortController?.abort();
+      this.resolveLogRefresh();
     },
     async readStream(response) {
       const reader = response.body.getReader();
@@ -297,7 +331,7 @@ createApp({
         running: this.serviceRunning(service.name),
         ports: this.servicePorts(service.name),
         openUrl: this.serviceOpenUrl(service),
-        busy: this.actionInProgress,
+        busy: this.actionInProgress || this.logFollowing,
         'onUpdate:selected': selected => this.setServiceSelected(service.name, selected),
         onRunAction: action => this.runAction(action, [service.name]),
         onFollowLogs: () => this.followLogs(service.name)
@@ -318,14 +352,16 @@ createApp({
         ]),
         h('div', { class: 'actions' }, actions.map(([action, icon, label, className]) => iconButton(icon, label, {
           class: className,
-          disabled: this.actionInProgress,
+          disabled: this.actionInProgress || this.logFollowing,
           onClick: () => this.runAction(action)
         }))),
         h('h2', ['サービス ', h('small', '（未選択ならすべて）')]),
         h('div', { class: 'services' }, this.project.services.map(service => this.renderService(service))),
         h('div', { class: 'log-head' }, [
           h('h2', '実行結果'),
-          iconButton('logs', 'ログを追跡', { disabled: this.actionInProgress, onClick: this.followLogs }),
+          this.logFollowing
+            ? iconButton('stop', 'ログ追跡を停止', { class: 'danger', onClick: this.stopLogs })
+            : iconButton('logs', 'ログを追跡', { disabled: this.actionInProgress, onClick: () => this.followLogs() }),
           iconButton('clear', '実行結果を消去', { onClick: () => { this.output = ''; } })
         ]),
         h('pre', { ref: 'output' }, this.output)
