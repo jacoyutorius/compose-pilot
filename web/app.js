@@ -93,9 +93,13 @@ const ServiceCard = {
     running: { type: Boolean, required: true },
     ports: { type: String, required: true },
     openUrl: { type: String, default: '' },
-    busy: { type: Boolean, required: true }
+    busy: { type: Boolean, required: true },
+    buildOptions: { type: Object, required: true }
   },
-  emits: ['update:selected', 'run-action', 'follow-logs'],
+  emits: ['update:selected', 'update-build-options', 'run-action', 'follow-logs'],
+  data() {
+    return { buildOptionsOpen: false };
+  },
   render() {
     return h('article', { class: ['service', { 'self-service': this.service.self }] }, [
       h('span', { class: 'service-name' }, [
@@ -125,8 +129,39 @@ const ServiceCard = {
         iconButton('logs', 'ログを追跡', {
           disabled: this.busy || !this.service.selectable,
           onClick: () => this.$emit('follow-logs')
+        }),
+        iconButton('settings', 'ビルド設定', {
+          class: this.buildOptionsOpen ? 'active' : '',
+          disabled: this.busy || !this.service.selectable,
+          'aria-expanded': String(this.buildOptionsOpen),
+          onClick: () => { this.buildOptionsOpen = !this.buildOptionsOpen; }
         })
       ]),
+      this.buildOptionsOpen ? h('section', { class: 'build-options', 'aria-label': `${this.service.name}のビルド設定` }, [
+        h('label', { class: 'check-option' }, [
+          h('input', {
+            type: 'checkbox',
+            checked: this.buildOptions.noCache,
+            onChange: event => this.$emit('update-build-options', {
+              ...this.buildOptions,
+              noCache: event.target.checked
+            })
+          }),
+          h('span', '--no-cache')
+        ]),
+        h('label', { for: `build-args-${this.service.name}` }, '--build-arg'),
+        h('textarea', {
+          id: `build-args-${this.service.name}`,
+          rows: '3',
+          value: this.buildOptions.buildArgsText,
+          placeholder: 'APP_ENV=development\nDEBUG=true',
+          onInput: event => this.$emit('update-build-options', {
+            ...this.buildOptions,
+            buildArgsText: event.target.value
+          })
+        }),
+        h('small', '1行に1つ、KEY=VALUE形式。機密情報には使用しないでください。')
+      ]) : null,
       h('div', { class: 'service-footer' }, [
         h('small', this.ports),
         this.openUrl ? h('a', {
@@ -157,9 +192,7 @@ createApp({
       logAbortController: null,
       logRefreshTimer: null,
       logRefreshResolve: null,
-      buildOptionsOpen: false,
-      buildNoCache: false,
-      buildArgsText: '',
+      buildOptionsByService: {},
       loading: true,
       error: '',
       theme: window.ComposePilotTheme.current()
@@ -204,6 +237,9 @@ createApp({
       this.project = await response.json();
       const selectable = new Set(this.project.services.filter(service => service.selectable).map(service => service.name));
       this.selectedServices = this.selectedServices.filter(name => selectable.has(name));
+      this.buildOptionsByService = Object.fromEntries(
+        [...selectable].map(name => [name, this.buildOptionsByService[name] || { noCache: false, buildArgsText: '' }])
+      );
       await this.loadStatus();
     },
     async loadStatus() {
@@ -257,6 +293,21 @@ createApp({
       this.theme = this.theme === 'dark' ? 'light' : 'dark';
       window.ComposePilotTheme.apply(this.theme);
     },
+    setServiceBuildOptions(name, options) {
+      this.buildOptionsByService = { ...this.buildOptionsByService, [name]: options };
+    },
+    buildOptionsPayload(services) {
+      const targets = services.length
+        ? services
+        : this.project.services.filter(service => service.selectable).map(service => service.name);
+      return Object.fromEntries(targets.map(name => {
+        const options = this.buildOptionsByService[name] || { noCache: false, buildArgsText: '' };
+        return [name, {
+          noCache: options.noCache,
+          buildArgs: options.buildArgsText.split('\n').map(line => line.trim()).filter(Boolean)
+        }];
+      }));
+    },
     async runAction(action, services = this.selectedServices) {
       if (this.actionInProgress || this.logFollowing || !this.project) return;
       const includesSelf = this.project.services.some(service => service.self && services.includes(service.name));
@@ -271,8 +322,7 @@ createApp({
           body: JSON.stringify({
             action,
             services,
-            noCache: this.buildNoCache,
-            buildArgs: this.buildArgsText.split('\n').map(line => line.trim()).filter(Boolean)
+            buildOptions: this.buildOptionsPayload(services)
           })
         });
         if (!response.ok) throw new Error(await response.text());
@@ -346,7 +396,9 @@ createApp({
         ports: this.servicePorts(service.name),
         openUrl: this.serviceOpenUrl(service),
         busy: this.actionInProgress || this.logFollowing,
+        buildOptions: this.buildOptionsByService[service.name] || { noCache: false, buildArgsText: '' },
         'onUpdate:selected': selected => this.setServiceSelected(service.name, selected),
+        onUpdateBuildOptions: options => this.setServiceBuildOptions(service.name, options),
         onRunAction: action => this.runAction(action, [service.name]),
         onFollowLogs: () => this.followLogs(service.name)
       });
@@ -368,33 +420,7 @@ createApp({
           class: className,
           disabled: this.actionInProgress || this.logFollowing,
           onClick: () => this.runAction(action)
-        })).concat([
-          iconButton('settings', 'ビルド設定', {
-            class: this.buildOptionsOpen ? 'active' : '',
-            disabled: this.actionInProgress || this.logFollowing,
-            'aria-expanded': String(this.buildOptionsOpen),
-            onClick: () => { this.buildOptionsOpen = !this.buildOptionsOpen; }
-          })
-        ])),
-        this.buildOptionsOpen ? h('section', { class: 'build-options', 'aria-label': 'ビルド設定' }, [
-          h('label', { class: 'check-option' }, [
-            h('input', {
-              type: 'checkbox',
-              checked: this.buildNoCache,
-              onChange: event => { this.buildNoCache = event.target.checked; }
-            }),
-            h('span', '--no-cache（ビルドキャッシュを使用しない）')
-          ]),
-          h('label', { for: 'build-args' }, '--build-arg'),
-          h('textarea', {
-            id: 'build-args',
-            rows: '3',
-            value: this.buildArgsText,
-            placeholder: 'APP_ENV=development\nDEBUG=true',
-            onInput: event => { this.buildArgsText = event.target.value; }
-          }),
-          h('small', '1行に1つ、KEY=VALUE形式で指定します。機密情報には使用しないでください。')
-        ]) : null,
+        }))),
         h('div', { class: 'workspace-grid' }, [
           h('section', { class: 'service-panel', 'aria-labelledby': 'services-heading' }, [
             h('h2', { id: 'services-heading' }, ['サービス ', h('small', '（未選択ならすべて）')]),

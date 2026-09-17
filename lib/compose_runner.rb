@@ -64,15 +64,24 @@ module ComposePilot
       [stdout.empty? ? stderr : stdout, process.success?]
     end
 
-    def action_commands(action:, services:, no_cache: false, build_args: [])
-      if action == "build-up"
-        return [
-          action_command(action: "build", services: services, no_cache: no_cache, build_args: build_args),
-          action_command(action: "up", services: services)
-        ]
+    def action_commands(action:, services:, build_options: {})
+      if %w[build build-up].include?(action)
+        targets = target_services(services)
+        options = validate_build_options!(build_options)
+        commands = targets.map do |service|
+          service_options = options.fetch(service, {})
+          action_command(
+            action: "build",
+            services: [service],
+            no_cache: service_options.fetch("noCache", false),
+            build_args: service_options.fetch("buildArgs", [])
+          )
+        end
+        commands << action_command(action: "up", services: targets) if action == "build-up"
+        return commands
       end
 
-      [action_command(action: action, services: services, no_cache: no_cache, build_args: build_args)]
+      [action_command(action: action, services: services)]
     end
 
     def action_command(action:, services:, no_cache: false, build_args: [])
@@ -122,6 +131,41 @@ module ComposePilot
     end
 
     private
+
+    def target_services(services)
+      config = compose_config
+      known_services = config.fetch("services", {}).keys
+      validate_self_service!(known_services)
+      unknown_services = services - known_services
+      raise ComposeError, "存在しないサービスが指定されています: #{unknown_services.join(', ')}" unless unknown_services.empty?
+      if services.include?(@self_service) && !@allow_self_operation
+        raise ComposeError, "Compose Pilot自身は操作できません"
+      end
+
+      targets = services.empty? ? known_services - [@self_service] : services
+      raise ComposeError, "操作対象のサービスがありません" if targets.empty?
+
+      targets
+    end
+
+    def validate_build_options!(build_options)
+      raise ComposeError, "ビルド設定が正しくありません" unless build_options.is_a?(Hash)
+
+      known_services = compose_config.fetch("services", {}).keys
+      unknown_services = build_options.keys - known_services
+      unless unknown_services.empty?
+        raise ComposeError, "存在しないサービスのビルド設定です: #{unknown_services.join(', ')}"
+      end
+
+      build_options.to_h do |service, options|
+        raise ComposeError, "#{service}のビルド設定が正しくありません" unless options.is_a?(Hash)
+
+        [service, {
+          "noCache" => options["noCache"] == true,
+          "buildArgs" => validate_build_args!(Array(options["buildArgs"]))
+        }]
+      end
+    end
 
     def validate_build_args!(build_args)
       raise ComposeError, "build-argは50件まで指定できます" if build_args.length > 50

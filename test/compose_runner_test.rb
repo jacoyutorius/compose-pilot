@@ -92,13 +92,32 @@ class ComposeRunnerTest < Minitest::Test
       stub_config do
         commands = runner.action_commands(
           action: "build-up",
-          services: ["web"],
-          no_cache: true,
-          build_args: ["APP_ENV=development"]
+          services: ["web", "db"],
+          build_options: {
+            "web" => { "noCache" => true, "buildArgs" => ["APP_ENV=development"] },
+            "db" => { "noCache" => false, "buildArgs" => ["DB_VERSION=17"] }
+          }
         )
 
         assert_equal ["build", "--no-cache", "--build-arg", "APP_ENV=development", "web"], commands[0].last(5)
-        assert_equal ["up", "-d", "web"], commands[1].last(3)
+        assert_equal ["build", "--build-arg", "DB_VERSION=17", "db"], commands[1].last(4)
+        assert_equal ["up", "-d", "web", "db"], commands[2].last(4)
+      end
+    end
+  end
+
+  def test_build_rejects_options_for_unknown_service
+    with_runner do |runner|
+      stub_config do
+        error = assert_raises(ComposePilot::ComposeError) do
+          runner.action_commands(
+            action: "build",
+            services: ["web"],
+            build_options: { "unknown" => { "buildArgs" => [] } }
+          )
+        end
+
+        assert_match(/存在しないサービスのビルド設定/, error.message)
       end
     end
   end

@@ -114,8 +114,7 @@ module ComposePilot
       commands = settings.runner.action_commands(
         action: body["action"].to_s,
         services: Array(body["services"]).map(&:to_s),
-        no_cache: body["noCache"] == true,
-        build_args: Array(body["buildArgs"])
+        build_options: body.fetch("buildOptions", {})
       )
       command_response(commands, operation_key: "project")
     rescue ComposeError => e
