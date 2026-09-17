@@ -355,16 +355,22 @@ createApp({
           disabled: this.actionInProgress || this.logFollowing,
           onClick: () => this.runAction(action)
         }))),
-        h('h2', ['サービス ', h('small', '（未選択ならすべて）')]),
-        h('div', { class: 'services' }, this.project.services.map(service => this.renderService(service))),
-        h('div', { class: 'log-head' }, [
-          h('h2', '実行結果'),
-          this.logFollowing
-            ? iconButton('stop', 'ログ追跡を停止', { class: 'danger', onClick: this.stopLogs })
-            : iconButton('logs', 'ログを追跡', { disabled: this.actionInProgress, onClick: () => this.followLogs() }),
-          iconButton('clear', '実行結果を消去', { onClick: () => { this.output = ''; } })
-        ]),
-        h('pre', { ref: 'output' }, this.output)
+        h('div', { class: 'workspace-grid' }, [
+          h('section', { class: 'service-panel', 'aria-labelledby': 'services-heading' }, [
+            h('h2', { id: 'services-heading' }, ['サービス ', h('small', '（未選択ならすべて）')]),
+            h('div', { class: 'services' }, this.project.services.map(service => this.renderService(service)))
+          ]),
+          h('section', { class: 'output-panel', 'aria-labelledby': 'output-heading' }, [
+            h('div', { class: 'log-head' }, [
+              h('h2', { id: 'output-heading' }, '実行結果'),
+              this.logFollowing
+                ? iconButton('stop', 'ログ追跡を停止', { class: 'danger', onClick: this.stopLogs })
+                : iconButton('logs', 'ログを追跡', { disabled: this.actionInProgress, onClick: () => this.followLogs() }),
+              iconButton('clear', '実行結果を消去', { onClick: () => { this.output = ''; } })
+            ]),
+            h('pre', { ref: 'output' }, this.output)
+          ])
+        ])
       ]);
     }
   },

@@ -90,7 +90,10 @@ h2 { font-size: 14px; color: var(--heading-muted); text-transform: uppercase; le
 .primary { color: #fff; background: var(--primary); border-color: var(--primary-border); }
 .primary:hover { background: #5544d6; }
 .danger { color: var(--danger); }
-.services { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-bottom: 26px; }
+.workspace-grid { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(440px, 1.2fr); align-items: start; gap: 22px; }
+.service-panel, .output-panel { min-width: 0; }
+.service-panel > h2, .log-head { min-height: 38px; margin-top: 0; }
+.services { display: grid; grid-template-columns: 1fr; align-content: start; gap: 10px; }
 .service { display: grid; gap: 5px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 .service > span:not(.service-name) { color: var(--state-text); }
 .service small { color: var(--muted); }
@@ -104,9 +107,13 @@ h2 { font-size: 14px; color: var(--heading-muted); text-transform: uppercase; le
 .open-link:hover { color: var(--link-hover); background: var(--button-hover); }
 .log-head { justify-content: flex-start; gap: 8px; }
 .log-head h2 { margin-right: auto; }
-pre { min-height: 330px; max-height: 52vh; overflow: auto; background: var(--console-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; color: var(--console-text); white-space: pre-wrap; }
+.output-panel { position: sticky; top: 0; }
+pre { height: calc(100vh - 270px); min-height: 420px; max-height: 720px; margin: 0; overflow: auto; background: var(--console-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; color: var(--console-text); white-space: pre-wrap; }
 .empty { height: 100%; display: grid; place-items: center; color: var(--empty); }
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .content { padding: 18px; }
   .actions { flex-wrap: wrap; }
+  .workspace-grid { grid-template-columns: 1fr; }
+  .output-panel { position: static; }
+  pre { height: auto; min-height: 330px; max-height: 52vh; }
 }
