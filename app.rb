@@ -17,6 +17,7 @@ module ComposePilot
     set :server, :puma
     set :public_folder, File.expand_path("web", __dir__)
     set :static, true
+    set :static_cache_control, [:no_store]
 
     configure do
       container_root = ENV.fetch("PROJECT_ROOT", "/workspace")
