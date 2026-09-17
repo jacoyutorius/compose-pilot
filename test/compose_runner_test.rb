@@ -67,6 +67,54 @@ class ComposeRunnerTest < Minitest::Test
     end
   end
 
+  def test_build_accepts_no_cache_and_multiple_build_args
+    with_runner do |runner|
+      stub_config do
+        command = runner.action_command(
+          action: "build",
+          services: ["web"],
+          no_cache: true,
+          build_args: ["APP_ENV=development", "DEBUG=true"]
+        )
+
+        assert_equal [
+          "build", "--no-cache",
+          "--build-arg", "APP_ENV=development",
+          "--build-arg", "DEBUG=true",
+          "web"
+        ], command.last(7)
+      end
+    end
+  end
+
+  def test_build_up_runs_build_before_up
+    with_runner do |runner|
+      stub_config do
+        commands = runner.action_commands(
+          action: "build-up",
+          services: ["web"],
+          no_cache: true,
+          build_args: ["APP_ENV=development"]
+        )
+
+        assert_equal ["build", "--no-cache", "--build-arg", "APP_ENV=development", "web"], commands[0].last(5)
+        assert_equal ["up", "-d", "web"], commands[1].last(3)
+      end
+    end
+  end
+
+  def test_build_rejects_invalid_build_arg
+    with_runner do |runner|
+      stub_config do
+        error = assert_raises(ComposePilot::ComposeError) do
+          runner.action_command(action: "build", services: ["web"], build_args: ["INVALID"])
+        end
+
+        assert_match(/KEY=VALUE/, error.message)
+      end
+    end
+  end
+
   def test_unknown_service_is_rejected
     with_runner do |runner|
       stub_config do

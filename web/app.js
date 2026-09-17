@@ -47,6 +47,12 @@ const iconPaths = {
   ],
   moon: [
     ['path', { d: 'M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z' }]
+  ],
+  settings: [
+    ['path', { d: 'M4 6h10m4 0h2M4 12h2m4 0h10M4 18h10m4 0h2' }],
+    ['circle', { cx: '16', cy: '6', r: '2' }],
+    ['circle', { cx: '8', cy: '12', r: '2' }],
+    ['circle', { cx: '16', cy: '18', r: '2' }]
   ]
 };
 
@@ -151,6 +157,9 @@ createApp({
       logAbortController: null,
       logRefreshTimer: null,
       logRefreshResolve: null,
+      buildOptionsOpen: false,
+      buildNoCache: false,
+      buildArgsText: '',
       loading: true,
       error: '',
       theme: window.ComposePilotTheme.current()
@@ -259,7 +268,12 @@ createApp({
         const response = await fetch('/api/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, services })
+          body: JSON.stringify({
+            action,
+            services,
+            noCache: this.buildNoCache,
+            buildArgs: this.buildArgsText.split('\n').map(line => line.trim()).filter(Boolean)
+          })
         });
         if (!response.ok) throw new Error(await response.text());
         await this.readStream(response);
@@ -354,7 +368,33 @@ createApp({
           class: className,
           disabled: this.actionInProgress || this.logFollowing,
           onClick: () => this.runAction(action)
-        }))),
+        })).concat([
+          iconButton('settings', 'ビルド設定', {
+            class: this.buildOptionsOpen ? 'active' : '',
+            disabled: this.actionInProgress || this.logFollowing,
+            'aria-expanded': String(this.buildOptionsOpen),
+            onClick: () => { this.buildOptionsOpen = !this.buildOptionsOpen; }
+          })
+        ])),
+        this.buildOptionsOpen ? h('section', { class: 'build-options', 'aria-label': 'ビルド設定' }, [
+          h('label', { class: 'check-option' }, [
+            h('input', {
+              type: 'checkbox',
+              checked: this.buildNoCache,
+              onChange: event => { this.buildNoCache = event.target.checked; }
+            }),
+            h('span', '--no-cache（ビルドキャッシュを使用しない）')
+          ]),
+          h('label', { for: 'build-args' }, '--build-arg'),
+          h('textarea', {
+            id: 'build-args',
+            rows: '3',
+            value: this.buildArgsText,
+            placeholder: 'APP_ENV=development\nDEBUG=true',
+            onInput: event => { this.buildArgsText = event.target.value; }
+          }),
+          h('small', '1行に1つ、KEY=VALUE形式で指定します。機密情報には使用しないでください。')
+        ]) : null,
         h('div', { class: 'workspace-grid' }, [
           h('section', { class: 'service-panel', 'aria-labelledby': 'services-heading' }, [
             h('h2', { id: 'services-heading' }, ['サービス ', h('small', '（未選択ならすべて）')]),

@@ -111,12 +111,13 @@ module ComposePilot
 
     post "/api/actions" do
       body = request_json
-      command = settings.runner.action_command(
+      commands = settings.runner.action_commands(
         action: body["action"].to_s,
         services: Array(body["services"]).map(&:to_s),
-        no_cache: body["noCache"] == true
+        no_cache: body["noCache"] == true,
+        build_args: Array(body["buildArgs"])
       )
-      command_response(command, operation_key: "project")
+      command_response(commands, operation_key: "project")
     rescue ComposeError => e
       json_response({ error: e.message }, status: 400)
     end

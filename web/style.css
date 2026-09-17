@@ -90,6 +90,14 @@ h2 { font-size: 14px; color: var(--heading-muted); text-transform: uppercase; le
 .primary { color: #fff; background: var(--primary); border-color: var(--primary-border); }
 .primary:hover { background: #5544d6; }
 .danger { color: var(--danger); }
+.active { color: #fff; background: var(--primary); border-color: var(--primary-border); }
+.build-options { display: grid; gap: 9px; max-width: 560px; margin: -14px 0 24px; padding: 14px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+.build-options label:not(.check-option) { color: var(--heading-muted); font-size: 13px; font-weight: 600; }
+.build-options textarea { width: 100%; resize: vertical; color: var(--text); background: var(--page-bg); border: 1px solid var(--button-border); border-radius: 8px; padding: 9px 10px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.build-options textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.build-options small { color: var(--muted); }
+.check-option { display: flex; align-items: center; gap: 8px; }
+.check-option input { accent-color: var(--primary); }
 .workspace-grid { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(440px, 1.2fr); align-items: start; gap: 22px; }
 .service-panel, .output-panel { min-width: 0; }
 .service-panel > h2, .log-head { min-height: 38px; margin-top: 0; }
