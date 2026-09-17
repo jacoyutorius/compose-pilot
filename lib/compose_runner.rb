@@ -88,7 +88,7 @@ module ComposePilot
       config = compose_config
       known_services = config.fetch("services", {}).keys
       validate_self_service!(known_services)
-      command = [*base_command, "logs", "--tail", "200", "--follow", "--no-color"]
+      command = [*base_command, "logs", "--tail", "200", "--no-color"]
       if service && !service.empty?
         raise ComposeError, "存在しないサービスです" unless known_services.include?(service)
         command << service

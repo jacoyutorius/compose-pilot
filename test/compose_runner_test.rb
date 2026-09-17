@@ -86,6 +86,32 @@ class ComposeRunnerTest < Minitest::Test
 
         assert_equal ["web", "db"], command.last(2)
         refute_includes command, "compose-pilot"
+        refute_includes command, "--follow"
+      end
+    end
+  end
+
+  def test_logs_can_target_a_single_service
+    with_runner do |runner|
+      stub_config do
+        command = runner.logs_command(service: "web")
+
+        assert_equal "web", command.last
+        refute_includes command, "db"
+        refute_includes command, "compose-pilot"
+        refute_includes command, "--follow"
+      end
+    end
+  end
+
+  def test_logs_reject_unknown_service
+    with_runner do |runner|
+      stub_config do
+        error = assert_raises(ComposePilot::ComposeError) do
+          runner.logs_command(service: "unknown")
+        end
+
+        assert_match(/存在しないサービス/, error.message)
       end
     end
   end
