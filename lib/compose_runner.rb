@@ -15,6 +15,7 @@ module ComposePilot
     OPEN_SCHEME_LABEL = "compose-pilot.open-scheme"
     OPEN_PATH_LABEL = "compose-pilot.open-path"
     OPEN_SCHEMES = %w[http https].freeze
+    BUILD_ARG_PATTERN = /\A[A-Za-z_][A-Za-z0-9_]*=.*\z/
 
     ACTIONS = {
       "build" => ["build"],
@@ -63,7 +64,27 @@ module ComposePilot
       [stdout.empty? ? stderr : stdout, process.success?]
     end
 
-    def action_command(action:, services:, no_cache: false)
+    def action_commands(action:, services:, build_options: {})
+      if %w[build build-up].include?(action)
+        targets = target_services(services)
+        options = validate_build_options!(build_options)
+        commands = targets.map do |service|
+          service_options = options.fetch(service, {})
+          action_command(
+            action: "build",
+            services: [service],
+            no_cache: service_options.fetch("noCache", false),
+            build_args: service_options.fetch("buildArgs", [])
+          )
+        end
+        commands << action_command(action: "up", services: targets) if action == "build-up"
+        return commands
+      end
+
+      [action_command(action: action, services: services)]
+    end
+
+    def action_command(action:, services:, no_cache: false, build_args: [])
       operation = ACTIONS[action]&.dup
       raise ComposeError, "対応していない操作です" unless operation
 
@@ -79,7 +100,12 @@ module ComposePilot
       target_services = services.empty? ? known_services - [@self_service] : services
       raise ComposeError, "操作対象のサービスがありません" if target_services.empty?
 
-      operation << "--no-cache" if action == "build" && no_cache
+      if action == "build"
+        operation << "--no-cache" if no_cache
+        validate_build_args!(build_args).each do |build_arg|
+          operation.concat(["--build-arg", build_arg])
+        end
+      end
       operation.concat(target_services)
       [*base_command, *operation]
     end
@@ -105,6 +131,54 @@ module ComposePilot
     end
 
     private
+
+    def target_services(services)
+      config = compose_config
+      known_services = config.fetch("services", {}).keys
+      validate_self_service!(known_services)
+      unknown_services = services - known_services
+      raise ComposeError, "存在しないサービスが指定されています: #{unknown_services.join(', ')}" unless unknown_services.empty?
+      if services.include?(@self_service) && !@allow_self_operation
+        raise ComposeError, "Compose Pilot自身は操作できません"
+      end
+
+      targets = services.empty? ? known_services - [@self_service] : services
+      raise ComposeError, "操作対象のサービスがありません" if targets.empty?
+
+      targets
+    end
+
+    def validate_build_options!(build_options)
+      raise ComposeError, "ビルド設定が正しくありません" unless build_options.is_a?(Hash)
+
+      known_services = compose_config.fetch("services", {}).keys
+      unknown_services = build_options.keys - known_services
+      unless unknown_services.empty?
+        raise ComposeError, "存在しないサービスのビルド設定です: #{unknown_services.join(', ')}"
+      end
+
+      build_options.to_h do |service, options|
+        raise ComposeError, "#{service}のビルド設定が正しくありません" unless options.is_a?(Hash)
+
+        [service, {
+          "noCache" => options["noCache"] == true,
+          "buildArgs" => validate_build_args!(Array(options["buildArgs"]))
+        }]
+      end
+    end
+
+    def validate_build_args!(build_args)
+      raise ComposeError, "build-argは50件まで指定できます" if build_args.length > 50
+
+      build_args.map do |build_arg|
+        value = build_arg.to_s
+        unless value.length <= 4096 && BUILD_ARG_PATTERN.match?(value)
+          raise ComposeError, "build-argはKEY=VALUE形式で指定してください: #{value}"
+        end
+
+        value
+      end
+    end
 
     def original_command
       file = File.expand_path(@compose_file, @container_root)
